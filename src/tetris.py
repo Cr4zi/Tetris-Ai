@@ -174,10 +174,10 @@ class Tetris:
             if y < 20 and down_result == Hit.NO_HIT and status[y + 1][x] == BFS_STATUS.DIDNT_VISIT:
                 q.put((x, y + 1))
                 status[y + 1][x] = BFS_STATUS.VISIT
-            if x > 0 and self.can_draw(x, y, Hit.LEFT) == Hit.NO_HIT and status[y][x - 1] == BFS_STATUS.DIDNT_VISIT:
+            if x > 0 and self.can_draw(x - 1, y, Hit.LEFT) == Hit.NO_HIT and status[y][x - 1] == BFS_STATUS.DIDNT_VISIT:
                 q.put((x - 1, y))
                 status[y][x - 1] = BFS_STATUS.VISIT
-            if x < 9 and self.can_draw(x, y, Hit.RIGHT) == Hit.NO_HIT and status[y][x + 1] == BFS_STATUS.DIDNT_VISIT:
+            if x < 9 and self.can_draw(x + 1, y, Hit.RIGHT) == Hit.NO_HIT and status[y][x + 1] == BFS_STATUS.DIDNT_VISIT:
                 q.put((x + 1, y))
                 status[y][x + 1] = BFS_STATUS.VISIT
 
