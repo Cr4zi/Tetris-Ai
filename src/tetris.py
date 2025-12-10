@@ -193,7 +193,6 @@ class Tetris:
         orig_x = self.x
         orig_y = self.y
         end_moves = self.every_possible_end_move(self.x, self.y)
-        print(end_moves)
         move = random.choice(end_moves)
         self._remove_piece(orig_x, orig_y)
         self._insert_piece(move[0], move[1])
