@@ -87,41 +87,52 @@ class Tetris:
     
     def rotate_piece(self):
         if self.cur_piece_index == 1: # if square don't do anything
-            return 
+            return False
 
+        did_rotate = True
         self.old_piece = self.cur_piece
         self._remove_piece()
         self.cur_piece = np.rot90(self.cur_piece, -1)
         if self.can_draw(self.x, self.y, Hit.ALL) != Hit.NO_HIT:
             self.cur_piece = self.old_piece
+            did_rotate = False
+
         self._insert_piece()
+        return did_rotate
         
 
-    def move_down_piece(self):
+    def move_down_piece(self, draw_new=True):
         if self.can_draw(self.x, self.y+1, Hit.DOWN) == Hit.DOWN: 
-            self.clear_up_lines()
-            self.new_next_piece()
-            self._insert_piece()
+            if draw_new:
+                self.clear_up_lines()
+                self.new_next_piece()
+                self._insert_piece()
+                return False
+            else:
+                return False
 
         self._remove_piece()
         self.y += 1
         self._insert_piece()
+        return True
 
     def move_right_piece(self):
         if self.can_draw(self.x + 1, self.y, Hit.RIGHT) == Hit.RIGHT:
-            return
+            return False
 
         self._remove_piece()
         self.x += 1
         self._insert_piece()
+        return True
 
     def move_left_piece(self):
         if self.can_draw(self.x - 1, self.y, Hit.LEFT) == Hit.LEFT:
-            return
+            return False
 
         self._remove_piece()
         self.x -= 1
         self._insert_piece()
+        return True
 
     def new_next_piece(self):
         self.x = 4
