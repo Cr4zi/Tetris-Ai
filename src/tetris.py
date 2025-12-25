@@ -2,6 +2,7 @@ import numpy as np
 import random
 from enum import Enum
 from queue import Queue
+import time
 
 class Hit(Enum):
     NO_HIT = 0
@@ -51,7 +52,10 @@ class Tetris:
 
         for row in range(len(self.cur_piece)):
             for col in range(len(self.cur_piece[0])):
-                self.board[y+row][x+col] ^= self.cur_piece[row][col]
+                # self.board[y+row][x+col] ^= self.cur_piece[row][col]
+                if self.cur_piece[row][col] == 1:
+                    self.board[y + row][x + col] = 1
+                    
 
     def _remove_piece(self, x = None, y = None):
         if x is None:
@@ -62,7 +66,7 @@ class Tetris:
         for row in range(len(self.cur_piece)):
             for col in range(len(self.cur_piece[0])):
                 if self.cur_piece[row][col] == 1:
-                    self.board[self.y+row][self.x+col] = 0
+                    self.board[y + row][x + col] = 0
 
     def can_draw(self, x, y, what):
         for row in range(len(self.cur_piece)):
@@ -128,6 +132,7 @@ class Tetris:
 
         did_rotate = self.can_rotate(x, y)
         if did_rotate:
+            self._remove_piece()
             self._insert_piece()
 
         return did_rotate
@@ -172,6 +177,42 @@ class Tetris:
         self.next_piece_index = random.randint(0, len(self.pieces)-1)
         self.next_piece = np.array(self.pieces[self.next_piece_index])
 
+    def grade_board(self):
+        FULL_ROW_SCORE = 10
+        HOLE_PENALTY = -5
+        HEIGHT_PENALTY = -0.5
+        BUMPINESS_PENALTY = -0.5
+
+        grade = 0
+        heights = [0] * 10
+
+        # Heights + holes
+        for col in range(2, 12):
+            block_found = False
+            for row in range(1, 20):
+                if self.board[row][col] == 1:
+                    if not block_found:
+                        heights[col - 2] = 20 - row
+                        block_found = True
+                    else:
+                        continue
+                elif block_found:
+                    grade += HOLE_PENALTY
+
+        # Full rows
+        for row in range(1, 20):
+            if all(self.board[row][col] == 1 for col in range(2, 12)):
+                grade += FULL_ROW_SCORE
+
+        # Height penalty
+        grade += HEIGHT_PENALTY * sum(heights)
+
+        # Bumpiness
+        for i in range(9):
+            grade += BUMPINESS_PENALTY * abs(heights[i] - heights[i + 1])
+
+        return grade
+
     '''
     Function that finds every possible end move
     @param orig_x - original x position of piece
@@ -181,6 +222,8 @@ class Tetris:
     '''
     def every_possible_end_move(self, orig_x, orig_y):
         end_moves = []
+
+        self._remove_piece(orig_x, orig_y)
         
         status = [[BFS_STATUS.DIDNT_VISIT for _ in range(10)] for _ in range(20)]
         q = Queue()
@@ -193,7 +236,8 @@ class Tetris:
             element = q.get()
             x, y = element
         
-            down_result = self.can_draw(x, y+1, Hit.DOWN)
+            down_result = self.can_draw(x, y + 1, Hit.DOWN)
+            
             if y < 20 and down_result == Hit.NO_HIT and status[y + 1][x] == BFS_STATUS.DIDNT_VISIT:
                 q.put((x, y + 1))
                 status[y + 1][x] = BFS_STATUS.VISIT
@@ -205,10 +249,13 @@ class Tetris:
                 status[y][x + 1] = BFS_STATUS.VISIT
 
             if down_result == Hit.DOWN and status[y + 1][x] == BFS_STATUS.DIDNT_VISIT:
-                end_moves.append(element)
+                self._insert_piece(x, y)
+                end_moves.append((x, y, self.grade_board()))
+                self._remove_piece(x, y)
 
             status[y][x] = BFS_STATUS.FINISHED # updating that we finished the current
 
+        self._insert_piece(orig_x, orig_y)
         return end_moves
             
 
@@ -216,26 +263,30 @@ class Tetris:
         orig_x = self.x
         orig_y = self.y
         end_moves = {0: [], 1: [], 2: [], 3: []} 
-        can_rotate = []
-
+        
         end_moves[0] = self.every_possible_end_move(orig_x, orig_y)
-        can_rotate.append(0)
         for rot in range(1, 4):
             if self.rotate_piece(orig_x, orig_y):
                 moves = self.every_possible_end_move(orig_x, orig_y)
-                can_rotate.append(rot)
 
                 for move in moves:
                     end_moves[rot].append(move)
-            
-        self.rotate_piece(orig_x, orig_y) # returning to original way
-        rot = random.choice(can_rotate)
-        if self.cur_piece_index == 1:
-            x, y = random.choice(end_moves[0])
-        else:
-            x, y = random.choice(end_moves[rot])
 
-        for _ in range(rot):
+
+        # We assume there has to be at least one move
+        best_move = end_moves[0][0]
+        rotation = 0
+        for rot in range(4):
+            for move in end_moves[rot]:
+                if move[2] > best_move[2]:
+                    best_move = move
+                    rotation = rot
+
+        for _ in range(rotation):
+            self.rotate_piece(orig_x, orig_y)
+
+        x, y = best_move[0], best_move[1]
+        for _ in range(rotation):
             self.rotate_piece(orig_x, orig_y)
 
         self._remove_piece(orig_x, orig_y)

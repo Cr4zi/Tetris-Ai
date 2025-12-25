@@ -45,7 +45,7 @@ class Window:
     def start(self):
         running = True
         MOVEEVENT, t = pygame.USEREVENT+1, 500
-        AGENTEVENT, t2 = pygame.USEREVENT+2, 500
+        AGENTEVENT, t2 = pygame.USEREVENT+2, 1000
 
         pygame.time.set_timer(MOVEEVENT, t)
         pygame.time.set_timer(AGENTEVENT, t2)
@@ -67,7 +67,6 @@ class Window:
 
                 if event.type == MOVEEVENT:
                     self.game_player.move_down_piece()
-                    #self.game_agent.agent_random_move()
                 if event.type == AGENTEVENT:
                     self.game_agent.agent_random_move()
 
