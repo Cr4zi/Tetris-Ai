@@ -1,8 +1,9 @@
 from tetris import Tetris
 import pygame
+import numpy as np
 
 class Window:
-    def __init__(self):
+    def __init__(self, DEBUG = False):
         self.RES = (1000,1000)
         self.game_agent = Tetris()
         self.AGENT = (50, 450) # where the board starts and ends
@@ -13,6 +14,8 @@ class Window:
         self.BLOCK_SIZE = 40 # 40x40 pixels
 
         self.HEIGHT = 100 # we'll start at y=100 up to y=900
+
+        self.DEBUG = DEBUG
 
 
         pygame.init()
@@ -27,6 +30,8 @@ class Window:
                 # Agent Board
                 if self.game_agent.board[row][col] == 0:
                     pygame.draw.rect(self.screen, (0,0,0), (self.AGENT[0] + self.BLOCK_SIZE*(col-2), self.HEIGHT + self.BLOCK_SIZE*row, self.BLOCK_SIZE, self.BLOCK_SIZE), 1)
+                elif self.game_agent.board[row][col] == 2:
+                    pygame.draw.rect(self.screen, (0,255,0), (self.AGENT[0] + self.BLOCK_SIZE*(col-2), self.HEIGHT + self.BLOCK_SIZE*row, self.BLOCK_SIZE, self.BLOCK_SIZE), 0)
                 else:
                     pygame.draw.rect(self.screen, (255,0,0), (self.AGENT[0] + self.BLOCK_SIZE*(col-2), self.HEIGHT + self.BLOCK_SIZE*row, self.BLOCK_SIZE, self.BLOCK_SIZE), 0)
 
@@ -49,6 +54,13 @@ class Window:
 
         pygame.time.set_timer(MOVEEVENT, t)
         pygame.time.set_timer(AGENTEVENT, t2)
+
+        end_moves = None
+        rotation = 0
+        x = None
+        y = None
+        rotated = False
+        
         while running:
             self.screen.fill("white")
             for event in pygame.event.get():
@@ -58,6 +70,7 @@ class Window:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_r:
                         self.game_player.rotate_piece()
+                        print("rotated")
                     elif event.key == pygame.K_a:
                         self.game_player.move_left_piece()
                     elif event.key == pygame.K_d:
@@ -68,9 +81,41 @@ class Window:
                 if event.type == MOVEEVENT:
                     self.game_player.move_down_piece()
                 if event.type == AGENTEVENT:
-                    self.game_agent.agent_random_move()
+                    if self.DEBUG:
+                        if end_moves is None:
+                            end_moves = self.game_agent.graded_moves()
+                            self.game_agent._remove_piece()
+                            print(end_moves)
+                            rotation = 0
+
+                        while rotation < 4 and (rotation not in end_moves or not end_moves[rotation]):
+                            self.game_agent.cur_piece = self.game_agent.pieces[self.game_agent.cur_piece_index]
+                            rotation += 1
+                            rotated = False
+
+                        if rotation < 4:
+                            x, y, grade = end_moves[rotation].pop(0)
+                            print(f"({rotation}) {x}, {y} : {grade}")
+                            if not rotated:
+                                for _ in range(rotation):
+                                    self.game_agent.cur_piece = np.rot90(self.game_agent.cur_piece, -1)
+                                    rotated = True
+                        else:
+                            print("Finished all possible moves")
+                            end_moves = None
+                            x, y = None, None
+                            rotated = False
+
+                            self.game_agent.agent_random_move()
+                    else:
+                        self.game_agent.agent_random_move()
 
             self.draw_game()
+            if self.DEBUG and x is not None:
+                self.game_agent._insert_piece(x, y, 2)
+                self.draw_game()
+                self.game_agent._remove_piece(x, y)
+
             self.draw_text()
             pygame.display.flip()
             self.clock.tick(60)

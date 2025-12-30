@@ -44,7 +44,7 @@ class Tetris:
         self.board.append([1 for _ in range(14)]) # padding down
         self.board = np.array(self.board)
 
-    def _insert_piece(self, x = None, y = None):
+    def _insert_piece(self, x = None, y = None, val = 1):
         if x is None:
             x = self.x
         if y is None:
@@ -54,7 +54,7 @@ class Tetris:
             for col in range(len(self.cur_piece[0])):
                 # self.board[y+row][x+col] ^= self.cur_piece[row][col]
                 if self.cur_piece[row][col] == 1:
-                    self.board[y + row][x + col] = 1
+                    self.board[y + row][x + col] = val
                     
 
     def _remove_piece(self, x = None, y = None):
@@ -65,34 +65,42 @@ class Tetris:
 
         for row in range(len(self.cur_piece)):
             for col in range(len(self.cur_piece[0])):
-                if self.cur_piece[row][col] == 1:
+                if self.cur_piece[row][col] == 1 and self.board[y + row][x + col] > 0: # because it can be 1 or 2
                     self.board[y + row][x + col] = 0
 
     def can_draw(self, x, y, what):
-        for row in range(len(self.cur_piece)):
-            for col in range(len(self.cur_piece[0])):
-                if self.cur_piece[row][col] != 1:
+        for r in range(len(self.cur_piece)):
+            for c in range(len(self.cur_piece[0])):
+                if self.cur_piece[r][c] == 0:
                     continue
 
-                if (what == Hit.DOWN or what == Hit.ALL) and (row == len(self.cur_piece) - 1 or self.cur_piece[row + 1][col] == 0):
-                    if self.board[row + y][col + x] == 1:
-                        return Hit.DOWN
+                board_y = y + r
+                board_x = x + c
 
-                if (what == Hit.LEFT or what == Hit.ALL) and (col == 0 or self.cur_piece[row][col - 1] == 0):
-                    if col + x < 2:
-                        return Hit.WALL
+                # DOWN
+                if what in (Hit.DOWN, Hit.ALL):
+                    if r == len(self.cur_piece) - 1 or self.cur_piece[r + 1][c] == 0:
+                        if self.board[board_y + 1][board_x] == 1:
+                            return Hit.DOWN
 
-                    if self.board[row + y][col + x] == 1:
-                        return Hit.LEFT
+                # LEFT
+                if what in (Hit.LEFT, Hit.ALL):
+                    if c == 0 or self.cur_piece[r][c - 1] == 0:
+                        if board_x - 1 < 0:
+                            return Hit.WALL
+                        if self.board[board_y][board_x - 1] == 1:
+                            return Hit.LEFT
 
-                if (what == Hit.RIGHT or what == Hit.ALL) and (col == len(self.cur_piece[0]) - 1 or self.cur_piece[row][col + 1] == 0):
-                    if col + x > 11:
-                        return Hit.WALL
-
-                    if self.board[row + y][col + x] == 1:
-                        return Hit.RIGHT
+                # RIGHT
+                if what in (Hit.RIGHT, Hit.ALL):
+                    if c == len(self.cur_piece[0]) - 1 or self.cur_piece[r][c + 1] == 0:
+                        if board_x + 1 >= len(self.board[0]):
+                            return Hit.WALL
+                        if self.board[board_y][board_x + 1] == 1:
+                            return Hit.RIGHT
 
         return Hit.NO_HIT
+
 
     def clear_up_lines(self):
         row = len(self.board) - 3
@@ -110,7 +118,6 @@ class Tetris:
 
             row -= 1
                 
-
     def can_rotate(self, x = None, y = None):
         if x is None:
             x = self.x
@@ -122,13 +129,14 @@ class Tetris:
 
         did_rotate = True
         self.old_piece = self.cur_piece
-        self._remove_piece()
+        self._remove_piece(x, y)
         self.cur_piece = np.rot90(self.cur_piece, -1)
         if self.can_draw(x, y, Hit.ALL) != Hit.NO_HIT:
             self.cur_piece = self.old_piece
             did_rotate = False
 
         return did_rotate
+    
     
     def rotate_piece(self, x = None, y = None):
         if x is None:
@@ -144,7 +152,7 @@ class Tetris:
         return did_rotate
 
     def move_down_piece(self, draw_new=True):
-        if self.can_draw(self.x, self.y+1, Hit.DOWN) == Hit.DOWN: 
+        if self.can_draw(self.x, self.y, Hit.DOWN) == Hit.DOWN: 
             if draw_new:
                 self.clear_up_lines()
                 self.new_next_piece()
@@ -157,7 +165,7 @@ class Tetris:
         return True
 
     def move_right_piece(self):
-        right = self.can_draw(self.x + 1, self.y, Hit.RIGHT) 
+        right = self.can_draw(self.x, self.y, Hit.RIGHT) 
         if right == Hit.RIGHT or right == Hit.WALL:
             return False
 
@@ -167,7 +175,7 @@ class Tetris:
         return True
 
     def move_left_piece(self):
-        left = self.can_draw(self.x - 1, self.y, Hit.LEFT) 
+        left = self.can_draw(self.x, self.y, Hit.LEFT) 
         if left == Hit.LEFT or left == Hit.WALL:
             return False
 
@@ -185,41 +193,124 @@ class Tetris:
         self.next_piece_index = random.randint(0, len(self.pieces)-1)
         self.next_piece = np.array(self.pieces[self.next_piece_index])
 
-    def grade_board(self):
-        FULL_ROW_SCORE = 10
-        HOLE_PENALTY = -5
-        HEIGHT_PENALTY = -0.5
-        BUMPINESS_PENALTY = -0.5
+    def _max_line_height(self):
+        max_line_height = 0
 
-        grade = 0
-        heights = [0] * 10
+        for i in range(2, 12):
+            for j in range(20):
+                if self.board[j][i] == 1:
+                    max_line_height = max(max_line_height, 20 - j)
+                    break
 
-        # Heights + holes
-        for col in range(2, 12):
-            block_found = False
-            for row in range(1, 20):
-                if self.board[row][col] == 1:
-                    if not block_found:
-                        heights[col - 2] = 20 - row
-                        block_found = True
-                    else:
+        return max_line_height
+
+    def _full_rows(self):
+        rows_cleared = 0
+        for i in range(20):
+            clear = True
+            for j in range(len(self.board[i])):
+                if self.board[i][j] == 0:
+                    clear = False
+        
+            if clear:
+                rows_cleared += 1
+            
+        return rows_cleared
+
+    def _holes(self):
+        holes = 0
+        open_holes = 0
+
+        for j in range(2, 12):
+            blocks_found = False
+            for i in range(20):
+                if self.board[i][j] == 1:
+                    blocks_found = True
+                elif blocks_found:
+                    if self.board[i][j - 1] == 0 and self.board[i][j - 2] == 0:
+                        open_holes += 1
                         continue
-                elif block_found:
-                    grade += HOLE_PENALTY
 
-        # Full rows
-        for row in range(1, 20):
-            if all(self.board[row][col] == 1 for col in range(2, 12)):
-                grade += FULL_ROW_SCORE
+                    if self.board[i][j + 1] == 0 and self.board[i][j + 2] == 0:
+                        open_holes += 1
+                        continue
+                    holes += 1
+                
+        return holes, open_holes
 
-        # Height penalty
-        grade += HEIGHT_PENALTY * sum(heights)
+    def _row_transitions(self):
+        row = 0
 
-        # Bumpiness
-        for i in range(9):
-            grade += BUMPINESS_PENALTY * abs(heights[i] - heights[i + 1])
+        for i in range(20):
+            for j in range(2, 12):
+                if self.board[i][j] == 1 and self.board[i][j - 1] == 0:
+                    row += 1
+                if self.board[i][j] == 1 and self.board[i][j + 1] == 0:
+                    row += 1
+        return row
 
-        return grade
+    def _col_transitions(self):
+        col = 0
+
+        for j in range(2, 12):
+            for i in range(20):
+                if self.board[i][j] == 1 and self.board[i - 1][j] == 0:
+                    col += 1
+                if self.board[i][j] == 1 and self.board[i + 1][j] == 0:
+                    col += 1
+
+        return col
+
+    # bampiness is defined as the total difference between column heights
+    def _bumpiness(self):
+        bumpiness = 0
+        previous_height = None 
+
+        for i in range(2, 12):
+            curr = 0
+            for j in range(20):
+                if self.board[j][i] == 1:
+                    curr = 20 - j
+                    break
+
+            if previous_height is not None:
+                bumpiness += abs(previous_height - curr)
+
+            previous_height = curr
+
+        return bumpiness
+
+    def _total_height(self):
+        total_height = 0
+        for j in range(2, 12):
+            for i in range(20):
+                if self.board[i][j] == 1:
+                    total_height += 20 - i
+                    break
+        return total_height
+                
+
+    def grade_board(self):
+        # features at: https://inria.hal.science/hal-00926213/document page 4 + some of mine
+        holes, open_holes = self._holes()
+        bumpiness = self._bumpiness()
+        row_transitions = self._row_transitions()
+        col_transitions = self._col_transitions()
+        max_height = self._max_line_height()
+        full_rows = self._full_rows()
+
+        score = (
+            - 40.0 * holes
+            - 20.0 * open_holes
+            - 8.0 * bumpiness
+            - 9.0 * row_transitions
+            - 7.0 * col_transitions
+            - 15.0 * max_height
+            # - 2.0 * total_height
+            + 50000.0 * full_rows
+        )
+
+        return score
 
     def every_possible_end_move(self, orig_x, orig_y):
         end_moves = []
@@ -235,48 +326,66 @@ class Tetris:
         x, y = element
         q.put(element)
         while not q.empty():
-            status[y][x] = BFS_STATUS.VISIT # updating that we finished
             element = q.get()
             x, y = element
         
-            down_result = self.can_draw(x, y + 1, Hit.DOWN)
-            left_result = self.can_draw(x - 1, y, Hit.LEFT)
-            right_result = self.can_draw(x + 1, y, Hit.RIGHT)
+            down_result = self.can_draw(x, y, Hit.DOWN)
+            left_result = self.can_draw(x, y, Hit.LEFT)
+            right_result = self.can_draw(x, y, Hit.RIGHT)
             
-            if y < 20 and down_result == Hit.NO_HIT and status[y + 1][x] == BFS_STATUS.DIDNT_VISIT:
+            if down_result == Hit.NO_HIT and status[y + 1][x] == BFS_STATUS.DIDNT_VISIT:
                 q.put((x, y + 1))
                 status[y + 1][x] = BFS_STATUS.VISIT
-            if x >= 2 and left_result == Hit.NO_HIT and status[y][x - 1] == BFS_STATUS.DIDNT_VISIT:
+            if left_result == Hit.NO_HIT and status[y][x - 1] == BFS_STATUS.DIDNT_VISIT:
                 q.put((x - 1, y))
                 status[y][x - 1] = BFS_STATUS.VISIT
-            if x <= 11 and right_result == Hit.NO_HIT and status[y][x + 1] == BFS_STATUS.DIDNT_VISIT:
+            if right_result == Hit.NO_HIT and status[y][x + 1] == BFS_STATUS.DIDNT_VISIT:
                 q.put((x + 1, y))
                 status[y][x + 1] = BFS_STATUS.VISIT
 
-            if down_result == Hit.DOWN and (left_result == Hit.NO_HIT or left_result == Hit.WALL) and (right_result == Hit.NO_HIT or right_result == Hit.WALL):
-                self._insert_piece(x, y)
-                end_moves.append((x, y, self.grade_board()))
-                self._remove_piece(x, y)
+            if down_result != Hit.NO_HIT:
+                    self._insert_piece(x, y)
+                    grade = self.grade_board()
+                    self._remove_piece(x, y)
+                    end_moves.append((x, y, grade))
 
-            status[y][x] = BFS_STATUS.FINISHED # updating that we finished the current
+            status[y][x] = BFS_STATUS.FINISHED
 
         self._insert_piece(orig_x, orig_y)
         return end_moves
-    
-    def agent_random_move(self):
+
+    def next(self):
+        self.clear_up_lines()
+        self.new_next_piece()
+        self._insert_piece()
+
+    def graded_moves(self):
         orig_x = self.x
         orig_y = self.y
         end_moves = {0: [], 1: [], 2: [], 3: []} 
         
         end_moves[0] = self.every_possible_end_move(orig_x, orig_y)
         for rot in range(1, 4):
-            if self.rotate_piece(orig_x, orig_y):
+            if self.can_rotate(orig_x, orig_y):
+                self.cur_piece = np.rot90(self.cur_piece, -1)
                 moves = self.every_possible_end_move(orig_x, orig_y)
 
                 for move in moves:
                     end_moves[rot].append(move)
+    
+        if self.can_rotate(orig_x, orig_y):
+            self.cur_piece = np.rot90(self.cur_piece, -1)
 
+        return end_moves
+    
+    def agent_random_move(self):
+        orig_x = self.x
+        orig_y = self.y
+
+        end_moves = self.graded_moves()
+        print(end_moves)
         self._remove_piece(orig_x, orig_y)
+
         self.cur_piece = self.pieces[self.cur_piece_index]
 
         # We assume there has to be at least one move
@@ -292,11 +401,10 @@ class Tetris:
         for _ in range(rotation):
             self.cur_piece = np.rot90(self.cur_piece, -1)
 
-        self._insert_piece(x, y)
-        print("*" * 20)
-        print(self.board)
+        if self.cur_piece_index == 0:
+            print(f"Chose {x}, {y}")
 
-        self.clear_up_lines()
-        self.new_next_piece()
-        self._insert_piece()
+        self._insert_piece(x, y)
+
+        self.next()
 
