@@ -1,4 +1,4 @@
-from tetris import Tetris
+from tetris import Tetris, Hit
 import pygame
 import numpy as np
 
@@ -59,7 +59,6 @@ class Window:
         rotation = 0
         x = None
         y = None
-        rotated = False
         
         while running:
             self.screen.fill("white")
@@ -70,7 +69,6 @@ class Window:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_r:
                         self.game_player.rotate_piece()
-                        print("rotated")
                     elif event.key == pygame.K_a:
                         self.game_player.move_left_piece()
                     elif event.key == pygame.K_d:
@@ -83,28 +81,24 @@ class Window:
                 if event.type == AGENTEVENT:
                     if self.DEBUG:
                         if end_moves is None:
-                            end_moves = self.game_agent.graded_moves()
                             self.game_agent._remove_piece()
+                            end_moves = self.game_agent.graded_moves()
                             print(end_moves)
                             rotation = 0
 
                         while rotation < 4 and (rotation not in end_moves or not end_moves[rotation]):
-                            self.game_agent.cur_piece = self.game_agent.pieces[self.game_agent.cur_piece_index]
                             rotation += 1
-                            rotated = False
 
                         if rotation < 4:
                             x, y, grade = end_moves[rotation].pop(0)
                             print(f"({rotation}) {x}, {y} : {grade}")
-                            if not rotated:
-                                for _ in range(rotation):
-                                    self.game_agent.cur_piece = np.rot90(self.game_agent.cur_piece, -1)
-                                    rotated = True
+                            self.game_agent.cur_piece = np.array(self.game_agent.pieces[self.game_agent.cur_piece_index])
+                            for _ in range(rotation):
+                                self.game_agent.cur_piece = np.rot90(self.game_agent.cur_piece, -1)
                         else:
                             print("Finished all possible moves")
                             end_moves = None
                             x, y = None, None
-                            rotated = False
 
                             self.game_agent.agent_random_move()
                     else:
@@ -112,7 +106,7 @@ class Window:
 
             self.draw_game()
             if self.DEBUG and x is not None:
-                self.game_agent._insert_piece(x, y, 2)
+                self.game_agent._insert_piece(x, y)
                 self.draw_game()
                 self.game_agent._remove_piece(x, y)
 
