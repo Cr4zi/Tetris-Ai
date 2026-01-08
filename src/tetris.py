@@ -68,6 +68,11 @@ class Tetris:
                 if self.cur_piece[row][col] == 1 and self.board[y + row][x + col] > 0: # because it can be 1 or 2
                     self.board[y + row][x + col] = 0
 
+    def reset(self):
+        for col in range(2, 12):
+            for row in range(20):
+                self.board[row][col] = 0
+
     def can_draw(self, x, y, what):
         for row in range(len(self.cur_piece)):
             for col in range(len(self.cur_piece[row])):
@@ -288,14 +293,14 @@ class Tetris:
         full_rows = self._full_rows()
 
         score = (
-            - 40.0 * holes
+            - 80.0 * holes
             - 20.0 * open_holes
             - 8.0 * bumpiness
             - 9.0 * row_transitions
             - 7.0 * col_transitions
-            - 15.0 * max_height
+            - 25.0 * max_height
             # - 2.0 * total_height
-            + 50000.0 * full_rows
+            + 500.0 * full_rows
         )
 
         return score
