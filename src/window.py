@@ -67,13 +67,13 @@ class Window:
                     running = False
 
                 if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_r:
+                    if event.key == pygame.K_SPACE:
                         self.game_player.rotate_piece()
-                    elif event.key == pygame.K_a:
+                    elif event.key == pygame.K_LEFT:
                         self.game_player.move_left_piece()
-                    elif event.key == pygame.K_d:
+                    elif event.key == pygame.K_RIGHT:
                         self.game_player.move_right_piece()
-                    elif event.key == pygame.K_s:
+                    elif event.key == pygame.K_DOWN:
                         self.game_player.move_down_piece()
 
                 if event.type == MOVEEVENT:
