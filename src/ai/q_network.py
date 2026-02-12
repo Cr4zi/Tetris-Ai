@@ -3,14 +3,36 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import random
+from collections import deque, namedtuple
+
+Transition = namedtuple('Transition',
+                        ('state', 'action', 'next_state', 'reward'))
+
+class ReplayMemory(object):
+    def __init__(self, capacity):
+        self.capactiy = capacity
+        self.memory = deque([], maxlen=capacity)
+
+    def clear(self):
+        if len(self.memory) == self.capactiy:
+            self.memory.clear()
+        
+    def push(self, *args):
+        # This clears memory if needed
+        self.clear()
+
+        self.memory.append(Transition(*args))
+
+    def sample(self, batch_size):
+        return random.sample(self.memory, batch_size)
+
+    def __len__(self):
+        return len(self.memory)
 
 class QNetwork(nn.Module):
-    def __init__(self, env: Tetris, epsilon=1, epsilon_min=0.05, epsilon_decay=0.01):
+    def __init__(self):
         super(QNetwork, self).__init__()
-        self.env = env
-        self.epsilon = epsilon
-        self.epsilon_min = epsilon_min
-        self.epsilon_decay = epsilon_decay
         self.layer1 = nn.Linear(7, 64)
         self.layer2 = nn.Linear(64, 64)
         self.layer3 = nn.Linear(64, 32)

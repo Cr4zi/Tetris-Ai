@@ -35,6 +35,8 @@ class Tetris:
         self.cur_piece = np.array(self.pieces[self.cur_piece_index])
         self.next_piece_index = random.randint(0, len(self.pieces)-1)
         self.next_piece = np.array(self.pieces[self.next_piece_index])
+
+        self.full_rows_rewards = {0: 0, 1: 40, 2: 100, 3: 300, 4: 1200}
         self._insert_piece()
 
 
@@ -43,6 +45,7 @@ class Tetris:
         self.board.append([1 for _ in range(14)]) # padding down
         self.board.append([1 for _ in range(14)]) # padding down
         self.board = np.array(self.board)
+        self.done = False
 
     def _insert_piece(self, x = None, y = None, val = 1):
         if x is None:
@@ -72,6 +75,11 @@ class Tetris:
         for col in range(2, 12):
             for row in range(20):
                 self.board[row][col] = 0
+
+
+        self._init_game()
+
+        return self.grade_board()
 
     def can_draw(self, x, y, what):
         for row in range(len(self.cur_piece)):
@@ -128,8 +136,8 @@ class Tetris:
             self.cur_piece = self.old_piece
             did_rotate = False
 
+        self._insert_piece(x, y)
         return did_rotate
-    
     
     def rotate_piece(self, x = None, y = None):
         if x is None:
@@ -193,7 +201,6 @@ class Tetris:
             for j in range(20):
                 if self.board[j][i] == 1:
                     max_line_height = max(max_line_height, 20 - j)
-                    break
 
         return max_line_height
 
@@ -254,7 +261,7 @@ class Tetris:
 
         return col
 
-    # bampiness is defined as the total difference between column heights
+    # bumpiness is defined as the total difference between column heights
     def _bumpiness(self):
         bumpiness = 0
         previous_height = None 
@@ -281,9 +288,8 @@ class Tetris:
                     total_height += 20 - i
                     break
         return total_height
-                
 
-    def grade_board(self):
+    def grade_board(self, calculate=True):
         # features at: https://inria.hal.science/hal-00926213/document page 4 + some of mine
         holes, open_holes = self._holes()
         bumpiness = self._bumpiness()
@@ -292,22 +298,27 @@ class Tetris:
         max_height = self._max_line_height()
         full_rows = self._full_rows()
 
-        score = (
-            - 80.0 * holes
-            - 20.0 * open_holes
-            - 8.0 * bumpiness
-            - 9.0 * row_transitions
-            - 7.0 * col_transitions
-            - 25.0 * max_height
-            # - 2.0 * total_height
-            + 500.0 * full_rows
-        )
+        if calculate:
+            score = (
+                - 80.0 * holes
+                - 20.0 * open_holes
+                - 8.0 * bumpiness
+                - 9.0 * row_transitions
+                - 7.0 * col_transitions
+                - 25.0 * max_height
+                + 500.0 * full_rows
+            )
 
-        return score
+            return score
+        return (holes, open_holes, bumpiness, row_transitions, col_transitions, max_height, full_rows)
 
-    def every_possible_end_move(self, orig_x, orig_y):
+    def is_done(self):
+        if self._max_line_height() > 16:
+            self.done = True
+        return self.done
+
+    def every_possible_end_move(self, orig_x, orig_y, calculate=True):
         end_moves = []
-
 
         status = [[BFS_STATUS.DIDNT_VISIT for _ in range(14)] for _ in range(23)]
         q = Queue()
@@ -329,7 +340,8 @@ class Tetris:
 
             if self.can_draw(x, y, Hit.DOWN) == Hit.DOWN:
                 self._insert_piece(x, y)
-                end_moves.append((x, y, self.grade_board()))
+                end_moves.append((x, y, self.grade_board(calculate)))
+                print(end_moves[-1])
                 self._remove_piece(x, y)
 
             status[y][x] = BFS_STATUS.FINISHED
@@ -341,7 +353,7 @@ class Tetris:
         self.new_next_piece()
         self._insert_piece()
 
-    def graded_moves(self):
+    def graded_moves(self, calculate=True):
         # SAVE STATE
         saved_board = self.board.copy()
         saved_piece = self.cur_piece.copy()
@@ -355,14 +367,14 @@ class Tetris:
 
         # rotation 0
         self._remove_piece(orig_x, orig_y)
-        end_moves[0] = self.every_possible_end_move(orig_x, orig_y)
+        end_moves[0] = self.every_possible_end_move(orig_x, orig_y, calculate)
         self._insert_piece(orig_x, orig_y)
 
         # rotations 1–3
         for rot in range(1, 4):
             self._remove_piece(orig_x, orig_y)
             self.cur_piece = np.rot90(self.cur_piece, -1)
-            end_moves[rot] = self.every_possible_end_move(orig_x, orig_y)
+            end_moves[rot] = self.every_possible_end_move(orig_x, orig_y, calculate)
             self._insert_piece(orig_x, orig_y)
 
         # RESTORE STATE
@@ -394,10 +406,24 @@ class Tetris:
         for _ in range(rotation):
             self.cur_piece = np.rot90(self.cur_piece, -1)
 
-        if self.cur_piece_index == 0:
-            print(f"Chose {x}, {y}")
-
         self._insert_piece(x, y)
 
         self.next()
+
+    def do_move(self, x, y, rotation):
+        # Since only the model will use this function and the moves are legal we don't have to check the validtiy of the moves
+        for _ in range(rotation):
+            self.cur_piece = np.rot90(self.cur_piece, -1)
+
+        self._insert_piece(x, y)
+
+        if self.is_done():
+            # -5 for dying
+            reward = -5
+        else:
+            # + 1 for staying alive
+            reward = self.full_rows_rewards[self._full_rows()] + 1
+
+        return (self.grade_board(False), reward, self.done)
+
 
