@@ -79,7 +79,7 @@ class Tetris:
 
         self._init_game()
 
-        return self.grade_board()
+        return self.grade_board(False)
 
     def can_draw(self, x, y, what):
         for row in range(len(self.cur_piece)):
@@ -341,7 +341,6 @@ class Tetris:
             if self.can_draw(x, y, Hit.DOWN) == Hit.DOWN:
                 self._insert_piece(x, y)
                 end_moves.append((x, y, self.grade_board(calculate)))
-                print(end_moves[-1])
                 self._remove_piece(x, y)
 
             status[y][x] = BFS_STATUS.FINISHED

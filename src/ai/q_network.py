@@ -11,11 +11,11 @@ Transition = namedtuple('Transition',
 
 class ReplayMemory(object):
     def __init__(self, capacity):
-        self.capactiy = capacity
+        self.capacity = capacity
         self.memory = deque([], maxlen=capacity)
 
     def clear(self):
-        if len(self.memory) == self.capactiy:
+        if len(self.memory) == self.capacity:
             self.memory.clear()
         
     def push(self, *args):

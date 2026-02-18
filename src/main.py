@@ -6,6 +6,7 @@ from ai import tetris_network
 if __name__ == '__main__':
     if len(sys.argv) != 2:
         print("Usage: python main.py <opt>")
+        exit(0)
 
     if sys.argv[1] == "play":
         window = Window(False)
@@ -14,3 +15,4 @@ if __name__ == '__main__':
         env = Tetris()
         net = tetris_network.TetrisNetwork(env)
         net.train()
+        net.save_model()
