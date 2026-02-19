@@ -423,6 +423,9 @@ class Tetris:
             # + 1 for staying alive
             reward = self.full_rows_rewards[self._full_rows()] + 1
 
+        self.clear_up_lines()
+        self.new_next_piece()
+
         return (self.grade_board(False), reward, self.done)
 
 

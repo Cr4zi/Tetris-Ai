@@ -13,6 +13,6 @@ if __name__ == '__main__':
         window.start()
     elif sys.argv[1] == "train":
         env = Tetris()
-        net = tetris_network.TetrisNetwork(env)
+        net = tetris_network.TetrisNetwork(env, True)
         net.train()
         net.save_model()
