@@ -410,6 +410,8 @@ class Tetris:
         self.next()
 
     def do_move(self, x, y, rotation):
+        self._remove_piece()
+        
         # Since only the model will use this function and the moves are legal we don't have to check the validtiy of the moves
         for _ in range(rotation):
             self.cur_piece = np.rot90(self.cur_piece, -1)
@@ -424,8 +426,9 @@ class Tetris:
             reward = self.full_rows_rewards[self._full_rows()] + 1
 
         self.clear_up_lines()
+        grade = self.grade_board(False)
         self.new_next_piece()
 
-        return (self.grade_board(False), reward, self.done)
+        return (grade, reward, self.done)
 
 

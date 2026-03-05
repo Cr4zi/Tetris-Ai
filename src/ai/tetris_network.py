@@ -38,7 +38,7 @@ class TetrisNetwork:
             self.target_net.eval()
             print("Loaded")
 
-        self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.learning_rate, amsgrad=True)
+        self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.learning_rate)
 
     def select_action(self, candidates):
         self.epsilon = max(self.epsilon_min, math.exp(- self.steps_done / self.epsilon_decay))
@@ -54,45 +54,11 @@ class TetrisNetwork:
                 dtype=torch.float32,
                 device=self.device
             )
-            values = self.policy_net(feature_tensor).squeeze(-1)
+            values = self.policy_net(feature_tensor)
             best = values.argmax().item()
 
         return best
 
-    '''
-    def optimize_model(self):
-        if len(self.exp_buffer) < self.BATCH_SIZE:
-            return
-
-        transitions = self.exp_buffer.sample(self.BATCH_SIZE)
-        batch = Transition(*zip(*transitions))
-
-        non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                            batch.next_state)), device=self.device, dtype=torch.bool)
-        non_final_next_states = torch.cat([s for s in batch.next_state
-                                                    if s is not None])
-        state_batch = torch.cat(batch.state)
-        action_batch = torch.cat(batch.action)
-        reward_batch = torch.cat(batch.reward)
-
-        state_action_values = self.policy_net(state_batch).gather(1, action_batch)
-        #state_action_values = self.policy_net(state_batch).squeeze(1)
-
-        next_state_values = torch.zeros(self.BATCH_SIZE, device=self.device)
-        with torch.no_grad():
-            #next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1).values
-            next_state_values[non_final_mask] = self.target_net(non_final_next_states).squeeze(1)
-        expected_state_action_values = (next_state_values * self.GAMMA) + reward_batch
-
-        criterion = nn.SmoothL1Loss()
-        loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
-
-        self.optimizer.zero_grad()
-        loss.backward()
-
-        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
-        self.optimizer.step()
-    '''
     def optimize_model(self):
         if len(self.exp_buffer) < self.BATCH_SIZE:
             return
@@ -110,6 +76,7 @@ class TetrisNetwork:
                                                     if s is not None])
         state_batch = torch.cat(batch.state)
         reward_batch = torch.cat(batch.reward)
+        done_batch = torch.cat(batch.done)
 
         # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
         # columns of actions taken. These are the actions which would've been taken
@@ -157,11 +124,6 @@ class TetrisNetwork:
                         candidates.append({"rot": rot, "x": move[0], "y": move[1], "features" : move[2]})
                 
                 best_action = self.select_action(candidates)
-                action_idx = torch.tensor(
-                    [[best_action]],
-                    device=self.device,
-                    dtype=torch.long
-                )
                 action = candidates[best_action]
                 
                 observation, reward, done = self.env.do_move(action["x"], action["y"], action["rot"])
@@ -178,7 +140,9 @@ class TetrisNetwork:
                 else:
                     next_state = torch.tensor(observation, dtype=torch.float32, device=self.device).unsqueeze(0)
 
-                self.exp_buffer.push(state, action_idx, next_state, reward_tensor)
+                done_tensor = torch.tensor(done, dtype=torch.bool, device=self.device)
+
+                self.exp_buffer.push(state, next_state, reward_tensor, done_tensor)
 
                 state = next_state
 
