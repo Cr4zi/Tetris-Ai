@@ -1,12 +1,17 @@
+from ai.tetris_network import TetrisNetwork
 from tetris import Tetris, Hit
 import pygame
 import numpy as np
 
+
 class Window:
-    def __init__(self, DEBUG = False):
+    def __init__(self, ai=False, DEBUG=False):
         self.RES = (1000,1000)
         self.game_agent = Tetris()
         self.AGENT = (50, 450) # where the board starts and ends
+
+        self.ai = ai
+        self.tetris_network = TetrisNetwork(self.game_agent, True, 0.05)
 
         self.game_player = Tetris()
         self.PLAYER = (550, 950) # where the board starts and ends
@@ -102,7 +107,12 @@ class Window:
 
                             self.game_agent.agent_random_move()
                     else:
-                        self.game_agent.agent_random_move()
+                        if self.ai:
+                            action = self.tetris_network.pick_move()
+
+                            self.game_agent.do_move(action["x"], action["y"], action["rot"])
+                        else:
+                            self.game_agent.agent_random_move()
 
             self.draw_game()
             if self.DEBUG and x is not None:

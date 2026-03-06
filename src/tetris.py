@@ -409,6 +409,15 @@ class Tetris:
 
         self.next()
 
+    def prepare_candidates(self):
+        moves_dict = self.graded_moves(False)
+        candidates = []
+        for rot in range(4):
+            for move in moves_dict[rot]:
+                candidates.append({"rot": rot, "x": move[0], "y": move[1], "features" : move[2]})
+
+        return candidates
+
     def do_move(self, x, y, rotation):
         self._remove_piece()
         
@@ -428,6 +437,7 @@ class Tetris:
         self.clear_up_lines()
         grade = self.grade_board(False)
         self.new_next_piece()
+        self._insert_piece()
 
         return (grade, reward, self.done)
 

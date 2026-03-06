@@ -6,10 +6,10 @@ import torch.optim as optim
 import torch.nn.functional as F
 import random
 import math
-
+import matplotlib.pyplot as plt
 
 class TetrisNetwork:
-    def __init__(self, env: Tetris, load=False, epsilon=1, epsilon_min=0.05, epsilon_decay=200000, learning_rate=3e-4):
+    def __init__(self, env: Tetris, load=False, epsilon_start=1.0, epsilon_min=0.001, epsilon_decay=100000, learning_rate=1e-4):
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else
             "mps" if torch.backends.mps.is_available() else
@@ -17,31 +17,30 @@ class TetrisNetwork:
         )
         
         self.env = env
-        self.BATCH_SIZE = 256
-        self.exp_buffer = ReplayMemory(2048)
+        self.BATCH_SIZE = 512
+        self.exp_buffer = ReplayMemory(20_000)
         
         self.steps_done = 0
-        self.epsilon = epsilon
+        self.epsilon_start = epsilon_start
         self.epsilon_min = epsilon_min
         self.epsilon_decay = epsilon_decay
         self.learning_rate = learning_rate
         self.GAMMA = 0.99
-        self.TAU = 0.005
 
-        self.policy_net = QNetwork().to(self.device)
-        self.target_net = QNetwork().to(self.device)
+        self.network = QNetwork().to(self.device)
         if load:
-            self.policy_net.load_state_dict(torch.load("policy_net", weights_only=True))
-            self.policy_net.eval()
-            
-            self.target_net.load_state_dict(torch.load("target_net", weights_only=True))
-            self.target_net.eval()
+            self.network.load_state_dict(torch.load("network", weights_only=True))
+            self.network.eval()
             print("Loaded")
 
-        self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.learning_rate)
+        self.optimizer = optim.AdamW(self.network.parameters(), lr=self.learning_rate)
+
+        self.loss_history = []
+        self.reward_history = []
+        self.steps_per_episode = []
 
     def select_action(self, candidates):
-        self.epsilon = max(self.epsilon_min, math.exp(- self.steps_done / self.epsilon_decay))
+        self.epsilon = self.epsilon_min + (self.epsilon_start - self.epsilon_min) * math.exp(-1 * self.steps_done / self.epsilon_decay)
         
         self.steps_done += 1
 
@@ -54,7 +53,7 @@ class TetrisNetwork:
                 dtype=torch.float32,
                 device=self.device
             )
-            values = self.policy_net(feature_tensor)
+            values = self.network(feature_tensor)
             best = values.argmax().item()
 
         return best
@@ -62,69 +61,64 @@ class TetrisNetwork:
     def optimize_model(self):
         if len(self.exp_buffer) < self.BATCH_SIZE:
             return
+
         transitions = self.exp_buffer.sample(self.BATCH_SIZE)
-        # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
-        # detailed explanation). This converts batch-array of Transitions
-        # to Transition of batch-arrays.
         batch = Transition(*zip(*transitions))
 
-        # Compute a mask of non-final states and concatenate the batch elements
-        # (a final state would've been the one after which simulation ended)
-        non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                            batch.next_state)), device=self.device, dtype=torch.bool)
-        non_final_next_states = torch.cat([s for s in batch.next_state
-                                                    if s is not None])
+        non_final_mask = torch.tensor(tuple(not d for d in batch.done), dtype=torch.bool, device=self.device)
+        non_final_next_states = torch.cat(
+            [s for s, d in zip(batch.next_state, batch.done) if not d]
+        )
+
         state_batch = torch.cat(batch.state)
-        reward_batch = torch.cat(batch.reward)
-        done_batch = torch.cat(batch.done)
+        reward_batch = torch.cat(batch.reward).unsqueeze(1)
+        done_batch = torch.cat(batch.done).unsqueeze(1)
 
-        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-        # columns of actions taken. These are the actions which would've been taken
-        # for each batch state according to policy_net
-        #print(action_batch)
-        state_action_values = self.policy_net(state_batch).squeeze(1)
+        '''
+        Since the model only calculate the grade of the state, it doesn't need the action.
+        We predict argmax(Q(s_t)) instead of argmax(Q(s_t,a_i)).
+        '''
+        state_values = self.network(state_batch)
 
-        # Compute V(s_{t+1}) for all next states.
-        # Expected values of actions for non_final_next_states are computed based
-        # on the "older" target_net; selecting their best reward with max(1).values
-        # This is merged based on the mask, such that we'll have either the expected
-        # state value or 0 in case the state was final.
-        next_state_values = torch.zeros(self.BATCH_SIZE, device=self.device)
+        next_state_values = torch.zeros(self.BATCH_SIZE, 1, device=self.device)
         with torch.no_grad():
-            next_state_values[non_final_mask] = self.target_net(non_final_next_states).squeeze(1)
-        # Compute the expected Q values
-        expected_state_action_values = (next_state_values * self.GAMMA) + reward_batch
+            next_state_values[non_final_mask] = self.network(non_final_next_states)
+            next_state_values[done_batch] = 0
 
-        # Compute Huber loss
-        criterion = nn.SmoothL1Loss()
-        loss = criterion(state_action_values, expected_state_action_values)
+        expected_values = reward_batch + self.GAMMA * next_state_values
+        loss = F.mse_loss(state_values, expected_values)
 
-        # Optimize the model
         self.optimizer.zero_grad()
         loss.backward()
-        # In-place gradient clipping
-        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
 
+        self.loss_history.append(loss.item())
+        
+    def pick_move(self):
+        candidates = self.env.prepare_candidates()
+
+        best_action = self.select_action(candidates)
+        action = candidates[best_action]
+        return action
+        
     def train(self):
+        self.network.train()
+        max_reward = 0
         if torch.cuda.is_available():
-            episodes = 100_000
+            episodes = 10_000
         else:
             episodes = 10000
 
         for episode in range(episodes):
             state = self.env.reset()
             state = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
+
             rewards = 0
+            steps = 0
+            
             while not self.env.done:
-                moves_dict = self.env.graded_moves(False)
-                candidates = []
-                for rot in range(4):
-                    for move in moves_dict[rot]:
-                        candidates.append({"rot": rot, "x": move[0], "y": move[1], "features" : move[2]})
-                
-                best_action = self.select_action(candidates)
-                action = candidates[best_action]
+                steps += 1
+                action = self.pick_move()
                 
                 observation, reward, done = self.env.do_move(action["x"], action["y"], action["rot"])
                 rewards += reward
@@ -140,21 +134,51 @@ class TetrisNetwork:
                 else:
                     next_state = torch.tensor(observation, dtype=torch.float32, device=self.device).unsqueeze(0)
 
-                done_tensor = torch.tensor(done, dtype=torch.bool, device=self.device)
+                done_tensor = torch.tensor([done], dtype=torch.bool, device=self.device)
 
                 self.exp_buffer.push(state, next_state, reward_tensor, done_tensor)
 
                 state = next_state
 
-                self.optimize_model()
+            if episode % 200 == 0:
+                self.save_model()
 
-                target_net_state_dict = self.target_net.state_dict()
-                policy_net_state_dict = self.policy_net.state_dict()
-                for key in policy_net_state_dict:
-                    target_net_state_dict[key] = policy_net_state_dict[key]*self.TAU + target_net_state_dict[key]*(1-self.TAU)
-                self.target_net.load_state_dict(target_net_state_dict)
-            print(f"At episode: {episode}, steps_done: {self.steps_done}, epsilon: {self.epsilon}, reward: {rewards}")
+            self.optimize_model()
+            self.optimize_model()
 
+            print(f"At episode: {episode}, steps_done: {steps}, epsilon: {self.epsilon}, reward: {rewards}")
+            self.reward_history.append(rewards)
+            self.steps_per_episode.append(steps)
+
+        print(f"Max Rewards: {max_reward}")
+
+    
     def save_model(self):
-        torch.save(self.policy_net.state_dict(), "policy_net")
-        torch.save(self.target_net.state_dict(), "target_net")
+        torch.save(self.network.state_dict(), "network")
+
+    def save_graphs(self):
+        plt.figure()
+        plt.plot(self.loss_history)
+        plt.title("Training Loss")
+        plt.xlabel("Optimization Step")
+        plt.ylabel("Loss")
+        plt.savefig("loss.png")
+        plt.close()
+
+        # Rewards
+        plt.figure()
+        plt.plot(self.reward_history)
+        plt.title("Episode Reward")
+        plt.xlabel("Episode")
+        plt.ylabel("Reward")
+        plt.savefig("rewards.png")
+        plt.close()
+
+        # Steps per episode
+        plt.figure()
+        plt.plot(self.steps_per_episode)
+        plt.title("Steps per Episode")
+        plt.xlabel("Episode")
+        plt.ylabel("Steps")
+        plt.savefig("steps.png")
+        plt.close()

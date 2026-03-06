@@ -11,8 +11,12 @@ if __name__ == '__main__':
     if sys.argv[1] == "play":
         window = Window(False)
         window.start()
+    elif sys.argv[1] == "ai-play":
+        window = Window(True, False)
+        window.start()
     elif sys.argv[1] == "train":
         env = Tetris()
-        net = tetris_network.TetrisNetwork(env, True)
+        net = tetris_network.TetrisNetwork(env, False)
         net.train()
         net.save_model()
+        net.save_graphs()

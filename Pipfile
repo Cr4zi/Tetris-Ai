@@ -7,8 +7,10 @@ name = "pypi"
 pygame = "*"
 numpy = "*"
 torch = "*"
+matplotlib = "*"
 
 [dev-packages]
 
 [requires]
 python_version = "3.13"
+python_full_version = "3.13.12"

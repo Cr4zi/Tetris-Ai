@@ -14,14 +14,7 @@ class ReplayMemory(object):
         self.capacity = capacity
         self.memory = deque([], maxlen=capacity)
 
-    def clear(self):
-        if len(self.memory) == self.capacity:
-            self.memory.clear()
-        
     def push(self, *args):
-        # This clears memory if needed
-        self.clear()
-
         self.memory.append(Transition(*args))
 
     def sample(self, batch_size):
