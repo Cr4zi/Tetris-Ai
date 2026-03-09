@@ -1,4 +1,4 @@
-from .q_network import QNetwork, ReplayMemory, Transition
+from .q_network import QNetworkA, ReplayMemory, Transition
 from tetris import Tetris
 import torch
 import torch.nn as nn
@@ -9,7 +9,7 @@ import math
 import matplotlib.pyplot as plt
 
 class TetrisNetwork:
-    def __init__(self, env: Tetris, load=False, epsilon_start=1.0, epsilon_min=0.001, epsilon_decay=100000, learning_rate=1e-4):
+    def __init__(self, env: Tetris, load=False, epsilon_start=1.0, epsilon_min=0.001, epsilon_decay=150000, learning_rate=1e-4):
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else
             "mps" if torch.backends.mps.is_available() else
@@ -27,7 +27,7 @@ class TetrisNetwork:
         self.learning_rate = learning_rate
         self.GAMMA = 0.99
 
-        self.network = QNetwork().to(self.device)
+        self.network = QNetworkA().to(self.device)
         if load:
             self.network.load_state_dict(torch.load("network", weights_only=True))
             self.network.eval()
@@ -143,6 +143,10 @@ class TetrisNetwork:
             if episode % 200 == 0:
                 self.save_model()
 
+            if rewards > max_reward:
+                max_reward = rewards
+                self.save_model("max_reward_network")
+
             self.optimize_model()
             self.optimize_model()
 
@@ -153,8 +157,8 @@ class TetrisNetwork:
         print(f"Max Rewards: {max_reward}")
 
     
-    def save_model(self):
-        torch.save(self.network.state_dict(), "network")
+    def save_model(self, name="network"):
+        torch.save(self.network.state_dict(), name)
 
     def save_graphs(self):
         plt.figure()
