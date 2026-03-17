@@ -9,7 +9,7 @@ import math
 import matplotlib.pyplot as plt
 
 class TetrisNetwork:
-    def __init__(self, env: Tetris, load=False, epsilon_start=1.0, epsilon_min=0.001, epsilon_decay=100_000, learning_rate=1e-4):
+    def __init__(self, env: Tetris, load=False, epsilon_start=1.0, epsilon_min=0.001, epsilon_decay=110_000, learning_rate=1e-4):
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else
             "mps" if torch.backends.mps.is_available() else
@@ -22,6 +22,7 @@ class TetrisNetwork:
         self.exp_buffer = ReplayMemory(20_000)
         
         self.steps_done = 0
+        self.epsilon = epsilon_start
         self.epsilon_start = epsilon_start
         self.epsilon_min = epsilon_min
         self.epsilon_decay = epsilon_decay
@@ -30,7 +31,7 @@ class TetrisNetwork:
 
         self.network = QNetworkA().to(self.device)
         if load:
-            self.network.load_state_dict(torch.load("max_reward_network", weights_only=True))
+            self.network.load_state_dict(torch.load("network", weights_only=True))
             self.network.eval()
             print("Loaded")
 
@@ -105,12 +106,9 @@ class TetrisNetwork:
     def train(self):
         self.network.train()
         max_reward = 0
-        if torch.cuda.is_available():
-            episodes = 10_000
-        else:
-            episodes = 10000
 
-        for episode in range(episodes):
+        episode = 1
+        while self.epsilon >= self.epsilon_min:
             state = self.env.reset()
             state = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
 
@@ -154,6 +152,7 @@ class TetrisNetwork:
             print(f"At episode: {episode}, steps_done: {steps}, epsilon: {self.epsilon}, reward: {rewards}")
             self.reward_history.append(rewards)
             self.steps_per_episode.append(steps)
+            episode += 1
 
         print(f"Max Rewards: {max_reward}")
 

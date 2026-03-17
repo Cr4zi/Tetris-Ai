@@ -36,3 +36,18 @@ class QNetworkA(nn.Module):
         x = F.relu(self.layer2(x))
         x = F.relu(self.layer3(x))
         return self.layer4(x)
+
+
+class QNetworkB(nn.Module):
+    def __init__(self):
+        super(QNetworkB, self).__init__()
+        self.layer1 = nn.Sequential(nn.Linear(7, 256))
+        self.layer2 = nn.Sequential(nn.Linear(256, 128))
+        self.layer3 = nn.Sequential(nn.Linear(128, 64))
+        self.layer4 = nn.Sequential(nn.Linear(64, 1))
+
+    def forward(self, x):
+        x = F.relu(self.layer1(x))
+        x = F.relu(self.layer2(x))
+        x = F.relu(self.layer3(x))
+        return self.layer4(x)
