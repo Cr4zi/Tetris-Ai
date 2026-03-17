@@ -339,10 +339,12 @@ class Tetris:
                 status[y][x + 1] = BFS_STATUS.VISIT
 
             if self.can_draw(x, y, Hit.DOWN) == Hit.DOWN:
+                prev_board = self.board.copy()
                 self._insert_piece(x, y)
+                self.clear_up_lines()
                 end_moves.append((x, y, self.grade_board(calculate)))
-                self._remove_piece(x, y)
-
+                self.board = prev_board
+                
             status[y][x] = BFS_STATUS.FINISHED
 
         return end_moves

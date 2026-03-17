@@ -9,12 +9,13 @@ import math
 import matplotlib.pyplot as plt
 
 class TetrisNetwork:
-    def __init__(self, env: Tetris, load=False, epsilon_start=1.0, epsilon_min=0.001, epsilon_decay=150000, learning_rate=1e-4):
+    def __init__(self, env: Tetris, load=False, epsilon_start=1.0, epsilon_min=0.001, epsilon_decay=100_000, learning_rate=1e-4):
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else
             "mps" if torch.backends.mps.is_available() else
             "cpu"
         )
+        print(self.device)
         
         self.env = env
         self.BATCH_SIZE = 512
@@ -29,7 +30,7 @@ class TetrisNetwork:
 
         self.network = QNetworkA().to(self.device)
         if load:
-            self.network.load_state_dict(torch.load("network", weights_only=True))
+            self.network.load_state_dict(torch.load("max_reward_network", weights_only=True))
             self.network.eval()
             print("Loaded")
 

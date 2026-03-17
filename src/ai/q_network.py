@@ -32,7 +32,7 @@ class QNetworkA(nn.Module):
         self.layer4 = nn.Sequential(nn.Linear(32, 1))
 
     def forward(self, x):
-        x = F.tanh(self.layer1(x))
-        x = F.tanh(self.layer2(x))
-        x = F.tanh(self.layer3(x))
+        x = F.relu(self.layer1(x))
+        x = F.relu(self.layer2(x))
+        x = F.relu(self.layer3(x))
         return self.layer4(x)
